@@ -1,0 +1,34 @@
+---
+description: explains sorter
+globs: 
+---
+# Project Overview
+sorter (https://sorter.social) is a social media platform built to create democratic consensus on any content. 
+
+we use a modification of the classic 'pagerank' algorithm (used by search engines for indexing among others) to efficiently calculate a ranked list (tag) of all items within tags from scalar pair-wise voting by users. 
+
+# Terminology
+- namespace: a group of tags, a top-level category. optional for tags. 
+- tag: a 'category' containing N items. items are sorted within the tag by voting. 
+- item: an element within a tag to be sorted. 
+- vote: a comparison of 2 items within the same tag, where user provides their opinion via a slider, where the magnitude towards either item represents the degree to which one item is chosen over the other. 
+- attribute: the domain which the opinion defined by votes is within -- default is ":default", meaning "quality". you might use ":benefit" or ":difficulty", etc. multiple attributes can be used within one tag. 
+- user: an end-user interacting with sorter via an account. a tag can be "filtered" by a user's name to display only rankings as voted on by that user. 
+- usergroup: a user-defined group of users which can be used to "filter" a tag (show the overall ranking based on only users within the usergroup.)
+
+# Project Structure
+to implement sorter we use a monorepo with multiple subprojects in their own directories. 
+- borter/ : short for backend sorter. a clojure implementation of our backend API. it handles database migrations, creates and exposes our backend API, and even serves our frontend (which is built and placed within borter directories). 
+- forter/ : short for frontend sorter. the node.js react frontend, built by vite and placed directly into borter. this defines the entire frontend for sorter and must be responsive to any viewport size (mainly mobile & desktop.) we use tailwind css, framer-motion, vite, react, etc. 
+- rustsorter/ : short for rust sorter. this is rust "business logic" for sorter which performs all of the rankings calculations for sorter. it is only queried directly via borter and so its functionality is only exposed via borter api endpoints. rustsorter also contains our discord bot implementation. 
+- clisorter/ : short for cli sorter. this is mostly an older copy of forter with a frontend redesign which was designed to be deployed alongside forter. it is deprecated and will be removed from the monorepo soon. we do not need to continue updating or supporting it. 
+
+we also have a postgreSQL database which rustsorter & borter interact with directly which stores votes, user information, etc. 
+
+finally our CI/CD is handled by by @deploy.yml github workflow. This handles multiple targets (those being staging & production.)
+
+# Style 
+for sorter we do not use typical aesthetics for our copy / text / errors / messages / etc. make sure this styling is adhered throughout the whole project. 
+- use only lowercase characters in button text, other text, API response messages, etc. 
+- messages should be composed with the minimum content to accurately convey their intended meaning. this means we don't say "please" or even strictly follow proper english language rules for phrases and sentences. 
+
