@@ -21,18 +21,9 @@ class Sorter:
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         })
+        # Using API key as namespace
+        self._namespace = api_key[:8]  # Using first 8 chars of API key as namespace
         logger.info(f"Sorter SDK initialized with base URL: {self.base_url}")
-    
-    def project(self, name: str) -> "Project":
-        """Get or create a project by name.
-        
-        Args:
-            name: Unique name for the project
-            
-        Returns:
-            Project: A project instance
-        """
-        return Project(self, name)
     
     def _request(self, method: str, path: str, **kwargs) -> Dict:
         """Make a request to the Sorter API.
@@ -49,25 +40,9 @@ class Sorter:
         response = self.client.request(method, url, **kwargs)
         response.raise_for_status()
         return response.json()
-
-
-class Project:
-    """Represents a project in Sorter."""
-    
-    def __init__(self, client: Sorter, name: str):
-        """Initialize a project.
         
-        Args:
-            client: Sorter client instance
-            name: Project name
-        """
-        self.client = client
-        self.name = name
-        self._namespace = name  # Using project name as namespace
-        logger.info(f"Project initialized: {name}")
-    
-    def create_tag(self, title: str, description: str = "", unlisted: bool = False) -> "Tag":
-        """Create a new tag.
+    def tag(self, title: str, description: str = "", unlisted: bool = False) -> "Tag":
+        """Create a new tag or get an existing one.
         
         Args:
             title: Tag title
@@ -75,8 +50,11 @@ class Project:
             unlisted: Whether the tag is unlisted
             
         Returns:
-            Tag: Created tag instance
+            Tag: New or existing tag instance
         """
+        # Check if tag exists
+        response = self._request("GET", f"/api/tag/exists?title={title}&ns={self._namespace}")
+        
         payload = {
             "title": title,
             "description": description,
@@ -84,38 +62,12 @@ class Project:
             "unlisted": unlisted
         }
         
-        response = self.client._request("POST", "/api/tag", json=payload)
+        # If tag exists, include its ID in the payload to update it
+        if response.get("exists"):
+            payload["id"] = response.get("id")
+        
+        response = self._request("POST", "/api/tag", json=payload)
         return Tag(self, response)
-    
-    def get_tag(self, tag_id: Optional[int] = None, title: Optional[str] = None) -> Optional["Tag"]:
-        """Get a tag by ID or title.
-        
-        Args:
-            tag_id: Tag ID
-            title: Tag title
-            
-        Returns:
-            Tag: Tag instance if found, None otherwise
-        """
-        # First check if tag exists by title if provided
-        if title:
-            response = self.client._request("GET", f"/api/tag/exists?title={title}&ns={self._namespace}")
-            if response.get("exists"):
-                tag_id = response.get("id")
-            else:
-                return None
-                
-        if not tag_id:
-            return None
-            
-        # Get all tags and find the specific one
-        all_tags = self.list_tags()
-        for category in ["public", "private", "unlisted"]:
-            for tag in all_tags.get(category, []):
-                if tag.get("id") == tag_id:
-                    return Tag(self, tag)
-        
-        return None
     
     def list_tags(self) -> Dict[str, List[Dict]]:
         """List all tags in the project.
@@ -123,7 +75,7 @@ class Project:
         Returns:
             Dict: Dictionary with categories of tags (public, private, unlisted)
         """
-        response = self.client._request("GET", "/api/tag")
+        response = self._request("GET", "/api/tag")
         # Filter by namespace
         result = {"public": [], "private": [], "unlisted": []}
         for category in ["public", "private", "unlisted"]:
@@ -137,15 +89,15 @@ class Project:
 class Tag:
     """Represents a tag in Sorter."""
     
-    def __init__(self, project: Project, data: Dict):
+    def __init__(self, sorter: Sorter, data: Dict):
         """Initialize a tag.
         
         Args:
-            project: Project instance
+            sorter: Sorter client instance
             data: Tag data from API
         """
-        self.project = project
-        self.client = project.client
+        self.sorter = sorter
+        self.client = sorter
         self.id = data.get("id")
         self.title = data.get("title")
         self.description = data.get("description")
@@ -165,7 +117,7 @@ class Tag:
         Returns:
             Tag: Updated tag instance
         """
-        payload = {"tag_id": self.id}
+        payload = {"id": self.id}
         
         if title:
             payload["title"] = title
@@ -175,7 +127,7 @@ class Tag:
             payload["unlisted"] = unlisted
         
         response = self.client._request("POST", "/api/tag", json=payload)
-        return Tag(self.project, response)
+        return Tag(self.sorter, response)
     
     def delete(self) -> bool:
         """Delete the tag.
@@ -186,21 +138,29 @@ class Tag:
         response = self.client._request("DELETE", f"/api/tag?id={self.id}")
         return response.get("deleted", False)
     
-    def create_item(self, title: str, description: str = "") -> "Item":
-        """Create a new item in this tag.
+    def item(self, title: str, description: str = "") -> "Item":
+        """Create a new item or update an existing one in this tag.
         
         Args:
             title: Item title
             description: Item description
             
         Returns:
-            Item: Created item instance
+            Item: New or updated item instance
         """
+        # We'll need to check existing items to see if one with this title exists
+        items = self.list_items()
+        existing_item = next((item for item in items if item.title == title), None)
+        
         payload = {
             "title": title,
             "description": description,
             "tag_id": self.id
         }
+        
+        # If item exists, include its ID in the payload
+        if existing_item:
+            payload["id"] = existing_item.id
         
         response = self.client._request("POST", "/api/item", json=payload)
         return Item(self, response)
