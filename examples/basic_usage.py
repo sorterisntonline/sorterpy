@@ -11,7 +11,7 @@ from sorterpy import Sorter
 def main():
     # Initialize the Sorter client with your API key
     sorter = Sorter(
-        #api_key="your_api_key_here", # Obviously this should be read from an environment variable, not hardcoded.
+        api_key="your_api_key_here", # Obviously this should be read from an environment variable, not hardcoded.
         # Optionally specify a different base URL if not using the default
         # base_url="https://staging.sorter.social"
     )
