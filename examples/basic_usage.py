@@ -6,14 +6,21 @@ This example demonstrates how to initialize the Sorter client,
 create tags and items, and perform basic operations.
 """
 
+import os
 from sorterpy import Sorter
+from datetime import datetime, timedelta
 
 def main():
     # Initialize the Sorter client with your API key
     sorter = Sorter(
-        api_key="your_api_key_here", # Obviously this should be read from an environment variable, not hardcoded.
+        # api_key="your_api_key_here", # Obviously this should be read from an environment variable, not hardcoded.
+        
         # Optionally specify a different base URL if not using the default
         # base_url="https://staging.sorter.social"
+        
+        # This is safer, probably do things this way.
+        api_key=os.getenv("SORT_API_KEY"),
+        base_url=os.getenv("SORT_BASE_URL")
     )
     
     # Create a new tag (or get existing) for categorizing items
@@ -34,7 +41,8 @@ def main():
     # Add items to the quality tag (or update if they exist)
     item1 = quality_tag.item(
         title="Landscape_001.jpg",
-        description="High-resolution landscape photograph with good lighting"
+        body="High-resolution landscape photograph with good lighting",
+        url=""
     )
     
     item2 = quality_tag.item(
@@ -43,6 +51,17 @@ def main():
     )
     
     print(f"Created/updated items: {item1.title}, {item2.title}")
+    
+    # Record a vote between two items
+    vote = quality_tag.vote(item1, 55, item2)
+    print(f"Recorded vote: {vote.id} between {item1.title} and {item2.title}")
+    
+    # Retrieve votes for the tag with a 'since' filter
+    since_time = (datetime.now() - timedelta(days=1)).isoformat()
+    votes_since = quality_tag.votes(since=since_time)
+    print(f"\nVotes for tag '{quality_tag.title}' since {since_time}:")
+    for v in votes_since:
+        print(f"- Vote ID {v.id}: {v.left_item_id} vs {v.right_item_id} with magnitude {v.magnitude}")
     
     # Update an item's properties
     updated_item = item2.update(
