@@ -48,7 +48,7 @@ class Sorter:
         # Configure logging based on options
         self._configure_logging()
         
-        logger.info(f"Sorter SDK initialized with base URL: {self.base_url}")
+        logger.debug(f"Sorter SDK initialized with base URL: {self.base_url}")
         logger.debug(f"Options: {self._pretty_json(self._options)}")
     
     def _configure_logging(self):
@@ -161,9 +161,25 @@ class Sorter:
                 logger.debug(f"Response body: {self._pretty_json(response.json())}")
             except Exception:
                 logger.debug(f"Response body: {response.text}")
-                
-        response.raise_for_status()
-        return response.json()
+        
+        try:
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            error_msg = f"HTTP Error: {e.response.status_code} for {method} {url}"
+            try:
+                error_data = e.response.json()
+                error_msg += f" - {error_data}"
+            except Exception:
+                error_msg += f" - {e.response.text}"
+            
+            logger.error(error_msg)
+            
+            if not self._options["quiet"]:
+                raise
+            else:
+                # In quiet mode, just log the error and return empty dict
+                return {}
         
     def tag(self, title: str, description: str = "", unlisted: bool = False, namespace: Optional[str] = None) -> "Tag":
         """Create a new tag or get an existing one.
@@ -318,15 +334,22 @@ class Sorter:
             backend_magnitude = magnitude
             logger.debug(f"Using 'positive' scale: {magnitude}")
         
+        # Handle attribute parameter
         if attribute is None:
-            attribute = 0  # Default attribute ID is 0
+            attribute_id = 0  # Default attribute ID is 0
+        elif isinstance(attribute, Attribute):
+            attribute_id = attribute.id
+        elif isinstance(attribute, int):
+            attribute_id = attribute
+        else:
+            raise TypeError("Invalid attribute type. Expected Attribute or int.")
         
         payload = {
             "left_item_id": left_item.id,
             "right_item_id": right_item.id,
             "magnitude": backend_magnitude,
             "tag_id": tag.id,
-            "attribute": attribute
+            "attribute": attribute_id
         }
         
         vote_info = {
@@ -334,7 +357,7 @@ class Sorter:
             "right_item": {"id": right_item.id, "title": right_item.title},
             "magnitude": magnitude,
             "backend_magnitude": backend_magnitude,
-            "attribute": attribute
+            "attribute": attribute_id
         }
         logger.debug(f"Voting details: {self._pretty_json(vote_info)}")
         
@@ -346,27 +369,25 @@ class Tag:
     """Represents a tag in Sorter."""
     
     def __init__(self, sorter: Sorter, data: Dict):
-        """Initialize a tag.
+        """Initialize a Tag instance.
         
         Args:
             sorter: Sorter client instance
-            data: Tag data from API
+            data: Tag data from the API
         """
-        self.sorter = sorter
         self.client = sorter
         self.id = data.get("id")
         self.title = data.get("title")
-        self.description = data.get("description")
         self.slug = data.get("slug")
-        self.namespace = data.get("namespace") or data.get("ns")  # Support both new and old API responses
-        self.owner = data.get("owner")
+        self.description = data.get("description", "")
+        self.unlisted = data.get("unlisted", False)
+        self.domain_pk = data.get("domain_pk")
+        self.domain_pk_namespace = data.get("domain_pk_namespace")
         self.created_at = data.get("created_at")
         self.edited_at = data.get("edited_at")
-        self.unlisted = data.get("unlisted", False)
-        self.domain_pk_namespace = data.get("domain_pk_namespace")
-        self.domain_pk = data.get("domain_pk")
-        self.vote_count = data.get("vote_count", 0)
-        logger.info(f"Tag initialized: {self.title} (ID: {self.id})")
+        self.owner = data.get("owner")
+        
+        logger.debug(f"Tag initialized: {self.title} (ID: {self.id})")
     
     def update(self, title: Optional[str] = None, description: Optional[str] = None, 
                unlisted: Optional[bool] = None, domain_pk_namespace: Optional[str] = None,
@@ -397,7 +418,7 @@ class Tag:
             payload["domain_pk"] = domain_pk
         
         response = self.client._request("POST", "/api/tag", json=payload)
-        return Tag(self.sorter, response)
+        return Tag(self.client, response)
     
     def delete(self) -> bool:
         """Delete the tag.
@@ -408,12 +429,12 @@ class Tag:
         response = self.client._request("DELETE", f"/api/tag?id={self.id}")
         return response.get("deleted", False)
     
-    def item(self, title: str, description: str = "") -> "Item":
+    def item(self, title: str, body: str = "") -> "Item":
         """Create a new item or update an existing one in this tag.
         
         Args:
             title: Item title
-            description: Item description
+            body: Item body
             
         Returns:
             Item: New or updated item instance
@@ -424,7 +445,7 @@ class Tag:
         
         payload = {
             "title": title,
-            "description": description,
+            "body": body,
             "tag_id": self.id
         }
         
@@ -433,6 +454,15 @@ class Tag:
             payload["id"] = existing_item.id
         
         response = self.client._request("POST", "/api/item", json=payload)
+        
+        # TODO: we need to handle the case where item is added to multiple tags returning multiple items, but not right now
+        # Handle case where API returns a list of items
+        if isinstance(response, list):
+            if response:  # If the list is not empty
+                response = response[0]  # Take the first item
+            else:
+                raise ValueError(f"API returned empty list when creating/updating item '{title}'")
+                
         return Item(self, response)
     
     def list_items(self) -> List["Item"]:
@@ -443,6 +473,12 @@ class Tag:
         """
         # According to the API spec, we need to get the feed for this tag
         response = self.client._request("GET", f"/api/feed?tag_id={self.id}")
+        
+        # TODO: remove this once the API is updated
+        # Handle case where response is an empty list for new tags
+        if isinstance(response, list):
+            return []
+            
         return [Item(self, item_data) for item_data in response.get("items", [])]
     
     def attribute(self, title: str, description: str = "") -> int:
@@ -516,15 +552,22 @@ class Tag:
             backend_magnitude = magnitude
             logger.debug(f"Using 'positive' scale: {magnitude}")
         
+        # Handle attribute parameter
         if attribute is None:
-            attribute = 0  # Default attribute ID is 0
+            attribute_id = 0  # Default attribute ID is 0
+        elif isinstance(attribute, Attribute):
+            attribute_id = attribute.id
+        elif isinstance(attribute, int):
+            attribute_id = attribute
+        else:
+            raise TypeError("Invalid attribute type. Expected Attribute or int.")
         
         payload = {
             "left_item_id": left_item.id,
             "right_item_id": right_item.id,
             "magnitude": backend_magnitude,
             "tag_id": self.id,
-            "attribute": attribute
+            "attribute": attribute_id
         }
         
         vote_info = {
@@ -532,7 +575,7 @@ class Tag:
             "right_item": {"id": right_item.id, "title": right_item.title},
             "magnitude": magnitude,
             "backend_magnitude": backend_magnitude,
-            "attribute": attribute
+            "attribute": attribute_id
         }
         logger.debug(f"Voting details: {self.client._pretty_json(vote_info)}")
         
@@ -661,7 +704,7 @@ class Item:
         self.edited_at = data.get("edited_at")
         self.domain_pk_namespace = data.get("domain_pk_namespace")
         self.domain_pk = data.get("domain_pk")
-        logger.info(f"Item initialized: {self.title} (ID: {self.id})")
+        logger.debug(f"Item initialized: {self.title} (ID: {self.id})")
     
     def __eq__(self, other):
         """Check if two items are equal.
@@ -758,7 +801,7 @@ class Vote:
         self.edited_at = data.get("edited_at")
         self.attribute = data.get("attribute", 0)  # Default attribute ID is 0
         self.domain_pk_namespace = data.get("domain_pk_namespace")
-        logger.info(f"Vote initialized: ID {self.id} between items {self.left_item_id} and {self.right_item_id}")
+        logger.debug(f"Vote initialized: ID {self.id} between items {self.left_item_id} and {self.right_item_id}")
     
     def delete(self) -> bool:
         """Delete the vote.
@@ -787,7 +830,7 @@ class Attribute:
         self.owner = data.get("owner")
         self.created_at = data.get("created_at")
         self.edited_at = data.get("edited_at")
-        logger.info(f"Attribute initialized: ID {self.id} with title {self.title}")
+        logger.debug(f"Attribute initialized: ID {self.id} with title {self.title}")
 
 
 class Rankings:
@@ -838,7 +881,7 @@ class Rankings:
         # Parse users who voted
         self._users_who_voted = data.get("users_who_voted", [])
         
-        logger.info(f"Rankings initialized for tag {tag.title} with {len(self._sorted_items)} sorted items")
+        logger.debug(f"Rankings initialized for tag {tag.title} with {len(self._sorted_items)} sorted items")
     
     def sorted(self) -> List[Item]:
         """Get sorted items.
@@ -876,43 +919,3 @@ class Rankings:
         if len(self._pair) != 2:
             raise ValueError("No voting pair available")
         return self._pair[0], self._pair[1]
-    
-    def votes(self) -> List[Vote]:
-        """Get votes.
-        
-        Returns:
-            List[Vote]: List of votes
-        """
-        return self._votes
-    
-    def attributes(self) -> List[Attribute]:
-        """Get attributes.
-        
-        Returns:
-            List[Attribute]: List of attributes
-        """
-        return self._attributes
-    
-    def selected_attribute(self) -> Optional[Attribute]:
-        """Get selected attribute.
-        
-        Returns:
-            Optional[Attribute]: Selected attribute if available
-        """
-        return self._selected_attribute
-    
-    def permissions(self) -> Dict:
-        """Get permissions.
-        
-        Returns:
-            Dict: Permissions dictionary
-        """
-        return self._permissions
-    
-    def users_who_voted(self) -> List[Dict]:
-        """Get users who voted.
-        
-        Returns:
-            List[Dict]: List of users who voted
-        """
-        return self._users_who_voted

@@ -16,22 +16,32 @@ def test_sorter_example():
         api_key=os.getenv('SORT_API_KEY', 'your-api-key'),
         base_url=os.getenv('SORT_BASE_URL', 'https://sorter.social'),
         options={
-            "vote_magnitude": os.getenv('SORT_VOTE_MAGNITUDE', 'equal'),  # Use environment or default
+            # Choose one of the following vote_magnitude options:
+            "vote_magnitude": "positive",  # Use 0-100 scale
+            # "vote_magnitude": "equal",   # Use -50 to 50 scale
             "verbose": True,  # Enable detailed logging
             "quiet": False    # Don't suppress logs
         }
     )
 
     # Step 1: Create the tag
-    tag = sorter.tag("alphabet")
+    tag = sorter.tag("alphabet_uniq") # TODO: errors suck, also tag names are globally unique
 
     # Step 2: Add letters A-Z
     letters = {ch: tag.item(ch) for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
 
     # Step 3: Sort by voting
     def letter_distance(a, b):
-        """Returns a vote score based on letter distance (-50 to 50)."""
-        return (ord(a.name) - ord(b.name)) * (50 / 25)  # Normalize to -50,50 range
+        """Returns a vote score based on letter distance.
+        
+        For "positive" vote_magnitude (0-100 scale):
+        """
+        # For "positive" vote_magnitude (0-100 scale)
+        raw_score = (ord(a.name) - ord(b.name)) * (50 / 25)  # Initially in -50,50 range
+        return int(raw_score + 50)  # Convert to 0,100 range
+        
+        # For "equal" vote_magnitude (-50 to 50 scale)
+        # return int((ord(a.name) - ord(b.name)) * (50 / 25))  # Normalize to -50,50 range
 
     correct_order = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     votes = 0
@@ -76,7 +86,7 @@ def test_sorter_example():
     left, right = tag.rankings().pair()
     
     # Test both parameter orderings with attribute
-    tag.vote(left, 25, right, attribute=quality_attr.id)
+    tag.vote(left, 25, right, attribute=quality_attr.id) # TODO: should be able to use attribute=quality_attr
     print(f"Voted on {left.name} vs {right.name} with quality attribute (first ordering)")
     
     tag.vote(left, right, 25, attribute=quality_attr.id)
@@ -84,9 +94,17 @@ def test_sorter_example():
     
     # Test changing options at runtime
     print("\nChanging options at runtime:")
+    
+    # Example of changing to "equal" vote_magnitude
+    # sorter.options(vote_magnitude="equal", verbose=False)
+    # print(f"New options: {sorter.options()}")
+    # # Now votes should be in -50 to 50 range
+    # tag.vote(left, right, 25)  # 25 in -50 to 50 scale
+    # print(f"Voted on {left.name} vs {right.name} with equal scale (25)")
+    
+    # Example of changing to "positive" vote_magnitude
     sorter.options(vote_magnitude="positive", verbose=False)
     print(f"New options: {sorter.options()}")
-    
     # Now votes should be in 0-100 range
     tag.vote(left, right, 75)  # 75 in 0-100 scale
     print(f"Voted on {left.name} vs {right.name} with positive scale (75)")
