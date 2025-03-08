@@ -1,12 +1,26 @@
-from sorterpy.sorterpy import Sorter, SorterOptions
+from sorterpy.sorterpy import Sorter
 
 def test_sorter_example():
     """Test the example code from the README."""
-    # Initialize API client
+    # Load environment variables from parent directory
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
+    
+    # Load .env from parent directory
+    dotenv_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(dotenv_path)
+    
+    # Initialize API client with options from environment variables
     sorter = Sorter(
-        api_key="sort_ISMvKXpX_2cd7f10f-942d-4fb8-b311-8b17e02353ce", 
-        base_url="http://localhost:3000", 
-        vote_magnitude_scale=SorterOptions.POSITIVE)
+        api_key=os.getenv('SORT_API_KEY', 'your-api-key'),
+        base_url=os.getenv('SORT_BASE_URL', 'https://sorter.social'),
+        options={
+            "vote_magnitude": os.getenv('SORT_VOTE_MAGNITUDE', 'equal'),  # Use environment or default
+            "verbose": True,  # Enable detailed logging
+            "quiet": False    # Don't suppress logs
+        }
+    )
 
     # Step 1: Create the tag
     tag = sorter.tag("alphabet")
@@ -67,6 +81,15 @@ def test_sorter_example():
     
     tag.vote(left, right, 25, attribute=quality_attr.id)
     print(f"Voted on {left.name} vs {right.name} with quality attribute (second ordering)")
+    
+    # Test changing options at runtime
+    print("\nChanging options at runtime:")
+    sorter.options(vote_magnitude="positive", verbose=False)
+    print(f"New options: {sorter.options()}")
+    
+    # Now votes should be in 0-100 range
+    tag.vote(left, right, 75)  # 75 in 0-100 scale
+    print(f"Voted on {left.name} vs {right.name} with positive scale (75)")
 
 if __name__ == "__main__":
     test_sorter_example() 

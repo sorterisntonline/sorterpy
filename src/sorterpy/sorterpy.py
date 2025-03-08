@@ -3,23 +3,28 @@
 import httpx
 from loguru import logger
 from typing import Dict, List, Optional, Union, Any, Tuple
-from enum import IntEnum
+import sys
+import json
 
-class SorterOptions(IntEnum):
-    """Options for the Sorter client."""
-    EQUAL = 0
-    POSITIVE = 1
+# Configure default logger with custom format
+logger.remove()
+# Custom format: abbreviated timestamp, abbreviated module path, no color for DEBUG level
+LOGGER_FORMAT = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+logger.add(sys.stderr, format=LOGGER_FORMAT, level="INFO")
 
 class Sorter:
     """Main client for the Sorter API."""
     
-    def __init__(self, api_key: str, base_url: str = "https://sorter.social", vote_magnitude_scale: SorterOptions = SorterOptions.EQUAL):
+    def __init__(self, api_key: str, base_url: str = "https://sorter.social", options: Optional[Dict] = None):
         """Initialize the Sorter client.
         
         Args:
             api_key: API key for authentication
             base_url: Base URL for the Sorter API
-            vote_magnitude_scale: Scale for vote magnitudes (EQUAL: -50 to 50, POSITIVE: 0 to 100)
+            options: Dictionary of client options
+                - vote_magnitude: "equal" (-50 to 50) or "positive" (0 to 100), default "equal"
+                - verbose: If True, enables detailed logging, default False
+                - quiet: If True, reduces logging to warnings and errors, default False
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
@@ -28,10 +33,51 @@ class Sorter:
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         })
+        
+        # Set default options
         self._options = {
-            "vote_magnitude_scale": vote_magnitude_scale
+            "vote_magnitude": "equal",
+            "verbose": False,
+            "quiet": False
         }
+        
+        # Update with user-provided options
+        if options:
+            self._options.update(options)
+            
+        # Configure logging based on options
+        self._configure_logging()
+        
         logger.info(f"Sorter SDK initialized with base URL: {self.base_url}")
+        logger.debug(f"Options: {self._pretty_json(self._options)}")
+    
+    def _configure_logging(self):
+        """Configure logging based on options."""
+        logger.remove()
+        
+        if self._options["quiet"]:
+            log_level = "WARNING"
+        elif self._options["verbose"]:
+            log_level = "DEBUG"
+        else:
+            log_level = "INFO"
+            
+        logger.add(sys.stderr, format=LOGGER_FORMAT, level=log_level)
+        logger.debug(f"Log level set to {log_level}")
+    
+    def _pretty_json(self, obj: Any) -> str:
+        """Format object as pretty JSON string for logging.
+        
+        Args:
+            obj: Object to format
+            
+        Returns:
+            str: Pretty formatted JSON string
+        """
+        try:
+            return json.dumps(obj, indent=2, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(obj)
     
     def options(self, **kwargs) -> Dict:
         """Update client options and return current options.
@@ -47,6 +93,11 @@ class Sorter:
             if key in self._options:
                 self._options[key] = value
         
+        # Reconfigure logging if verbose or quiet options changed
+        if "verbose" in kwargs or "quiet" in kwargs:
+            self._configure_logging()
+            
+        logger.debug(f"Options updated: {self._pretty_json(self._options)}")
         return self._options
     
     def _convert_magnitude_to_backend(self, magnitude: int) -> int:
@@ -58,7 +109,7 @@ class Sorter:
         Returns:
             int: Magnitude in backend scale (0-100)
         """
-        if self._options["vote_magnitude_scale"] == SorterOptions.EQUAL:
+        if self._options["vote_magnitude"] == "equal":
             # Convert from -50 to 50 scale to 0 to 100 scale
             return magnitude + 50
         else:
@@ -74,7 +125,7 @@ class Sorter:
         Returns:
             int: Magnitude in client scale
         """
-        if self._options["vote_magnitude_scale"] == SorterOptions.EQUAL:
+        if self._options["vote_magnitude"] == "equal":
             # Convert from 0 to 100 scale to -50 to 50 scale
             return magnitude - 50
         else:
@@ -93,7 +144,24 @@ class Sorter:
             Dict: Response from the API
         """
         url = f"{self.base_url}{path}"
+        
+        # Log request details if verbose
+        logger.debug(f"Request: {method} {url}")
+        if "params" in kwargs:
+            logger.debug(f"Request params: {self._pretty_json(kwargs['params'])}")
+        if "json" in kwargs:
+            logger.debug(f"Request body: {self._pretty_json(kwargs['json'])}")
+            
         response = self.client.request(method, url, **kwargs)
+        
+        # Log response details if verbose
+        logger.debug(f"Response status: {response.status_code}")
+        if self._options["verbose"]:
+            try:
+                logger.debug(f"Response body: {self._pretty_json(response.json())}")
+            except Exception:
+                logger.debug(f"Response body: {response.text}")
+                
         response.raise_for_status()
         return response.json()
         
@@ -222,10 +290,12 @@ class Sorter:
             # First ordering: vote(left_item, magnitude, right_item)
             magnitude = magnitude_or_right_item
             right_item = right_item_or_magnitude
+            logger.debug("Using first parameter ordering: vote(left_item, magnitude, right_item)")
         elif isinstance(magnitude_or_right_item, Item) and isinstance(right_item_or_magnitude, int):
             # Second ordering: vote(left_item, right_item, magnitude)
             right_item = magnitude_or_right_item
             magnitude = right_item_or_magnitude
+            logger.debug("Using second parameter ordering: vote(left_item, right_item, magnitude)")
         else:
             raise TypeError("Invalid parameter types. Expected either (Item, int, Item) or (Item, Item, int).")
         
@@ -237,14 +307,16 @@ class Sorter:
         tag = left_item.tag
         
         # Validate magnitude based on scale
-        if tag.client._options["vote_magnitude_scale"] == SorterOptions.EQUAL:
+        if self._options["vote_magnitude"] == "equal":
             if not (-50 <= magnitude <= 50):
                 raise ValueError("Magnitude must be between -50 and 50.")
-            backend_magnitude = tag.client._convert_magnitude_to_backend(magnitude)
+            backend_magnitude = self._convert_magnitude_to_backend(magnitude)
+            logger.debug(f"Using 'equal' scale: {magnitude} -> {backend_magnitude}")
         else:
             if not (0 <= magnitude <= 100):
                 raise ValueError("Magnitude must be between 0 and 100.")
             backend_magnitude = magnitude
+            logger.debug(f"Using 'positive' scale: {magnitude}")
         
         if attribute is None:
             attribute = 0  # Default attribute ID is 0
@@ -257,7 +329,16 @@ class Sorter:
             "attribute": attribute
         }
         
-        response = tag.client._request("POST", "/api/vote", json=payload)
+        vote_info = {
+            "left_item": {"id": left_item.id, "title": left_item.title},
+            "right_item": {"id": right_item.id, "title": right_item.title},
+            "magnitude": magnitude,
+            "backend_magnitude": backend_magnitude,
+            "attribute": attribute
+        }
+        logger.debug(f"Voting details: {self._pretty_json(vote_info)}")
+        
+        response = self._request("POST", "/api/vote", json=payload)
         return Vote(tag, response)
 
 
@@ -410,10 +491,12 @@ class Tag:
             # First ordering: vote(left_item, magnitude, right_item)
             magnitude = magnitude_or_right_item
             right_item = right_item_or_magnitude
+            logger.debug("Using first parameter ordering: vote(left_item, magnitude, right_item)")
         elif isinstance(magnitude_or_right_item, Item) and isinstance(right_item_or_magnitude, int):
             # Second ordering: vote(left_item, right_item, magnitude)
             right_item = magnitude_or_right_item
             magnitude = right_item_or_magnitude
+            logger.debug("Using second parameter ordering: vote(left_item, right_item, magnitude)")
         else:
             raise TypeError("Invalid parameter types. Expected either (Item, int, Item) or (Item, Item, int).")
         
@@ -422,14 +505,16 @@ class Tag:
             raise ValueError("Both items must belong to this tag.")
         
         # Validate magnitude based on scale
-        if self.client._options["vote_magnitude_scale"] == SorterOptions.EQUAL:
+        if self.client._options["vote_magnitude"] == "equal":
             if not (-50 <= magnitude <= 50):
                 raise ValueError("Magnitude must be between -50 and 50.")
             backend_magnitude = self.client._convert_magnitude_to_backend(magnitude)
+            logger.debug(f"Using 'equal' scale: {magnitude} -> {backend_magnitude}")
         else:
             if not (0 <= magnitude <= 100):
                 raise ValueError("Magnitude must be between 0 and 100.")
             backend_magnitude = magnitude
+            logger.debug(f"Using 'positive' scale: {magnitude}")
         
         if attribute is None:
             attribute = 0  # Default attribute ID is 0
@@ -441,6 +526,15 @@ class Tag:
             "tag_id": self.id,
             "attribute": attribute
         }
+        
+        vote_info = {
+            "left_item": {"id": left_item.id, "title": left_item.title},
+            "right_item": {"id": right_item.id, "title": right_item.title},
+            "magnitude": magnitude,
+            "backend_magnitude": backend_magnitude,
+            "attribute": attribute
+        }
+        logger.debug(f"Voting details: {self.client._pretty_json(vote_info)}")
         
         response = self.client._request("POST", "/api/vote", json=payload)
         return Vote(self, response)

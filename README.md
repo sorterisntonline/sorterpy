@@ -17,8 +17,15 @@ pip install sorterpy
 ```python
 from sorterpy import Sorter
 
-# Initialize the client
-sorter = Sorter(api_key="your-api-key")
+# Initialize the client with options
+sorter = Sorter(
+    api_key="your-api-key",
+    options={
+        "vote_magnitude": "equal",  # Use -50 to 50 scale (default)
+        "verbose": False,           # Disable detailed logging (default)
+        "quiet": False              # Don't suppress logs (default)
+    }
+)
 
 # Create a tag
 tag = sorter.tag("My Tag", description="A tag for testing")
@@ -34,7 +41,42 @@ tag.vote(item1, 25, item2)  # Same result, different parameter order
 
 # You can also vote directly through the sorter
 sorter.vote(item1, item2, 25)  # Same flexible parameter ordering
+
+# Change options at runtime
+sorter.options(vote_magnitude="positive", verbose=True)
 ```
+
+### Client Options
+
+The Sorter client accepts the following options:
+
+- `vote_magnitude`: Determines the scale for vote magnitudes
+  - `"equal"` (default): Uses a scale from -50 to 50, where 0 is neutral
+  - `"positive"`: Uses a scale from 0 to 100, where 50 is neutral
+- `verbose`: Enables detailed logging including HTTP requests and responses
+  - `False` (default): Normal logging (INFO level)
+  - `True`: Detailed logging (DEBUG level)
+- `quiet`: Reduces logging to only warnings and errors
+  - `False` (default): Normal logging (INFO level)
+  - `True`: Reduced logging (WARNING level)
+
+Note: If both `verbose` and `quiet` are set to `True`, `quiet` takes precedence.
+
+### Logging
+
+The SDK uses loguru for logging with a customized format:
+
+```
+12:34:56 | INFO     | sorterpy:__init__:42 - Sorter SDK initialized with base URL: https://sorter.social
+```
+
+The format includes:
+- Time (HH:MM:SS)
+- Log level
+- Abbreviated module name, function, and line number
+- Message
+
+When logging JSON data (like request/response bodies), the SDK pretty-prints the JSON for better readability.
 
 ### Sorting Example
 
