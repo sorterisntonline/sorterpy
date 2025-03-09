@@ -197,6 +197,12 @@ class Sorter:
         namespace_param = f"&namespace={namespace}" if namespace else ""
         response = self._request("GET", f"/api/tag/exists?title={title}{namespace_param}")
         
+        # If the tag exists, return a Tag instance with the existing data
+        if response.get("exists"):
+            logger.debug(f"Tag '{title}' already exists with ID {response.get('id')}")
+            return Tag(self, response)
+        
+        # Otherwise, create a new tag
         payload = {
             "title": title,
             "description": description,
@@ -207,10 +213,7 @@ class Sorter:
         if namespace:
             payload["namespace"] = namespace
         
-        # If tag exists, include its ID in the payload to update it
-        if response.get("exists"):
-            payload["id"] = response.get("id")
-        
+        logger.info(f"Creating new tag: '{title}'")
         response = self._request("POST", "/api/tag", json=payload)
         return Tag(self, response)
     
