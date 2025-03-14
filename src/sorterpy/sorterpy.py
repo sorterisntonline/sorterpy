@@ -432,19 +432,40 @@ class Tag:
         response = self.client._request("DELETE", f"/api/tag?id={self.id}")
         return response.get("deleted", False)
     
-    def item(self, title: str, body: str = "") -> "Item":
+    def item(self, title: Optional[str] = None, body: str = "") -> Union["Item", List["Item"]]:
         """Create a new item or update an existing one in this tag.
         
         Args:
-            title: Item title
+            title: Item title (if None, returns all items)
             body: Item body
             
         Returns:
-            Item: New or updated item instance
+            Union[Item, List[Item]]: New/updated item or list of all items if title=None
         """
-        # We'll need to check existing items to see if one with this title exists
+        # If title is None, return all items in the tag
+        if title is None:
+            # Get rankings to access sorted and unsorted items
+            rankings = self.rankings()
+            
+            # Combine sorted and unsorted items
+            all_items = rankings.sorted() + rankings.unsorted()
+            
+            # Return unique items (in case there are duplicates)
+            return list({item.id: item for item in all_items}.values())
+            
+        # We'll need to check existing items to see if one with this title or slug exists
         items = self.list_items()
+        
+        # First check by title (exact match)
         existing_item = next((item for item in items if item.title == title), None)
+        
+        # If not found by title, try to find by slug
+        if not existing_item:
+            # Simple approximation of slugification - actual implementation may vary
+            expected_slug = title.lower().replace(' ', '-')
+            existing_item = next((item for item in items if item.slug == expected_slug), None)
+            if existing_item:
+                logger.debug(f"Found existing item by slug: {existing_item.title} (slug: {existing_item.slug})")
         
         payload = {
             "title": title,
@@ -455,6 +476,9 @@ class Tag:
         # If item exists, include its ID in the payload
         if existing_item:
             payload["id"] = existing_item.id
+            logger.debug(f"Updating existing item: {existing_item.title} (ID: {existing_item.id})")
+        else:
+            logger.debug(f"Creating new item: {title}")
         
         response = self.client._request("POST", "/api/item", json=payload)
         
@@ -683,6 +707,54 @@ class Tag:
             ValueError: If no voting pair is available
         """
         return self.rankings().pair()
+
+    def find_item_by_slug(self, slug: str) -> Optional["Item"]:
+        """Find an item by its slug.
+        
+        Args:
+            slug: The slug to search for
+            
+        Returns:
+            Optional[Item]: The item if found, None otherwise
+        """
+        items = self.list_items()
+        return next((item for item in items if item.slug == slug), None)
+
+    def get_or_create_item(self, title: str, body: str = "") -> "Item":
+        """Get an existing item by title or slug, or create a new one if it doesn't exist.
+        
+        Args:
+            title: Item title
+            body: Item body (used only if creating a new item)
+            
+        Returns:
+            Item: Existing or new item instance
+            
+        Examples:
+            >>> # Get existing item or create new one
+            >>> item = tag.get_or_create_item("A")
+            
+            >>> # Create new item with body content
+            >>> item = tag.get_or_create_item("B", "This is the letter B")
+        """
+        # First check by title
+        items = self.list_items()
+        existing_item = next((item for item in items if item.title == title), None)
+        
+        # If not found by title, try to find by slug
+        if not existing_item:
+            # Simple approximation of slugification
+            expected_slug = title.lower().replace(' ', '-')
+            existing_item = next((item for item in items if item.slug == expected_slug), None)
+        
+        # If item exists, return it
+        if existing_item:
+            logger.debug(f"Found existing item: {existing_item.title} (ID: {existing_item.id})")
+            return existing_item
+        
+        # Otherwise, create a new item
+        logger.debug(f"Creating new item: {title}")
+        return self.item(title, body)
 
 
 class Item:

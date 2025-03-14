@@ -26,9 +26,40 @@ def test_sorter_example():
 
     # Step 1: Create the tag
     tag = sorter.tag("alphabet_uniq") # TODO: errors suck, also tag names are globally unique
+    
 
     # Step 2: Add letters A-Z
-    letters = {ch: tag.item(ch) for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+    # Method 1: Using the get_or_create_item method (recommended)
+    letters = {ch: tag.get_or_create_item(ch) for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+    
+    # Method 2: Manual check for existing items (alternative approach)
+    """
+    # First get all existing items in the tag
+    existing_items = tag.item()  # This returns all items in the tag
+    existing_items_by_slug = {item.slug: item for item in existing_items}
+    
+    # Create a dictionary to store items, checking if they already exist by slug
+    letters = {}
+    for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        # Check if an item with this slug already exists
+        # The slug is typically a lowercase version of the title with spaces replaced by hyphens
+        expected_slug = ch.lower().replace(' ', '-')
+        
+        # Using the dictionary of existing items
+        existing_item = existing_items_by_slug.get(expected_slug)
+        
+        # Alternative: Using the find_item_by_slug method
+        # existing_item = tag.find_item_by_slug(expected_slug)
+        
+        if existing_item:
+            # Use the existing item
+            letters[ch] = existing_item
+            print(f"Using existing item: {ch} (slug: {expected_slug})")
+        else:
+            # Create a new item
+            letters[ch] = tag.item(ch)
+            print(f"Created new item: {ch}")
+    """
 
     # Step 3: Sort by voting
     def letter_distance(a, b):
