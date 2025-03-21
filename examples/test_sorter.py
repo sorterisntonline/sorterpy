@@ -113,14 +113,14 @@ def test_sorter_example():
     print(f"Number of unsorted items: {len(rankings.unsorted())}")
     
     # Test attribute voting
-    quality_attr = sorter.create_attribute("quality", "How good is this letter")
+    quality_attr = sorter.attribute("quality", "How good is this letter")
     left, right = tag.rankings().pair()
     
     # Test both parameter orderings with attribute
-    tag.vote(left, 25, right, attribute=quality_attr.id) # TODO: should be able to use attribute=quality_attr
+    tag.vote(left, 25, right, attribute=quality_attr) # Now passing Attribute object directly
     print(f"Voted on {left.name} vs {right.name} with quality attribute (first ordering)")
     
-    tag.vote(left, right, 25, attribute=quality_attr.id)
+    tag.vote(left, right, 25, attribute=quality_attr)
     print(f"Voted on {left.name} vs {right.name} with quality attribute (second ordering)")
     
     # Test changing options at runtime

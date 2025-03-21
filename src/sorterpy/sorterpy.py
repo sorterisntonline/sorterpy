@@ -5,12 +5,132 @@ from loguru import logger
 from typing import Dict, List, Optional, Union, Any, Tuple
 import sys
 import json
+import importlib.metadata
+import re
 
 # Configure default logger with custom format
 logger.remove()
 # Custom format: abbreviated timestamp, abbreviated module path, no color for DEBUG level
 LOGGER_FORMAT = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 logger.add(sys.stderr, format=LOGGER_FORMAT, level="INFO")
+
+# Default compatible API versions if not specified in pyproject.toml
+DEFAULT_COMPATIBLE_VERSIONS = ["2"]
+
+def _is_version_compatible(api_version: str, compatible_versions: List[str]) -> Tuple[bool, bool, Optional[str]]:
+    """Check if API version is compatible with any of the specified versions.
+    
+    Args:
+        api_version: Version string from API (e.g., "2.1.0")
+        compatible_versions: List of compatible version patterns
+        
+    Returns:
+        Tuple[bool, bool, Optional[str]]: (fully_compatible, partially_compatible, matched_pattern)
+        - fully_compatible: True if version exactly matches a pattern
+        - partially_compatible: True if version matches a major version pattern
+        - matched_pattern: The pattern that matched (used for recommendations)
+    """
+    # Parse the API version
+    api_parts = api_version.split('.')
+    
+    # For simplicity, handle non-semantic versions or versions with suffixes
+    # by just taking the first three numeric parts
+    cleaned_parts = []
+    for part in api_parts:
+        # Extract just the numeric part at the beginning of the string
+        match = re.match(r'^\d+', part)
+        if match:
+            cleaned_parts.append(match.group(0))
+        if len(cleaned_parts) >= 3:
+            break
+    
+    # Pad with zeros if needed
+    while len(cleaned_parts) < 3:
+        cleaned_parts.append('0')
+    
+    api_major, api_minor, api_patch = map(int, cleaned_parts)
+    
+    # Track if we have a partial match (major version only)
+    fully_compatible = False
+    partially_compatible = False
+    matched_pattern = None
+    
+    # Check against each compatible version pattern
+    for version in compatible_versions:
+        pattern_parts = version.split('.')
+        
+        # Extract just the numeric parts for comparison
+        cleaned_pattern_parts = []
+        for part in pattern_parts:
+            match = re.match(r'^\d+', part)
+            if match:
+                cleaned_pattern_parts.append(match.group(0))
+        
+        # Major version only (e.g., "2")
+        if len(cleaned_pattern_parts) == 1:
+            pattern_major = int(cleaned_pattern_parts[0])
+            if api_major == pattern_major:
+                partially_compatible = True
+                matched_pattern = version
+        
+        # Major.minor version (e.g., "1.1")
+        elif len(cleaned_pattern_parts) == 2:
+            pattern_major, pattern_minor = map(int, cleaned_pattern_parts)
+            if api_major == pattern_major and api_minor == pattern_minor:
+                fully_compatible = True
+                matched_pattern = version
+        
+        # Full semver (e.g., "1.0.0")
+        elif len(cleaned_pattern_parts) == 3:
+            pattern_major, pattern_minor, pattern_patch = map(int, cleaned_pattern_parts)
+            if api_major == pattern_major and api_minor == pattern_minor and api_patch == pattern_patch:
+                fully_compatible = True
+                matched_pattern = version
+    
+    return fully_compatible, partially_compatible, matched_pattern
+
+def _get_compatible_versions() -> List[str]:
+    """Get compatible API versions from pyproject.toml or use defaults.
+    
+    Returns:
+        List[str]: List of compatible version patterns
+    """
+    try:
+        # Try to get metadata from pyproject.toml
+        pkg_data = importlib.metadata.metadata('sorterpy')
+        if hasattr(pkg_data, '_data') and 'tool.sorterpy.compatible_api_versions' in pkg_data._data:
+            return json.loads(pkg_data._data['tool.sorterpy.compatible_api_versions'])
+    except (importlib.metadata.PackageNotFoundError, AttributeError, KeyError, json.JSONDecodeError):
+        pass
+    
+    # If we can't read from metadata or the key doesn't exist, use defaults
+    return DEFAULT_COMPATIBLE_VERSIONS
+
+def _format_version_for_display(version: str) -> str:
+    """Format version pattern for display in logs.
+    
+    Args:
+        version: Version pattern (e.g., "2", "2.1", "1.0.0")
+        
+    Returns:
+        str: Formatted version for display (e.g., "2.x", "2.1.x", "1.0.0")
+    """
+    parts = version.split('.')
+    
+    # Extract just the numeric parts for counting
+    numeric_parts = []
+    for part in parts:
+        match = re.match(r'^\d+', part)
+        if match:
+            numeric_parts.append(match.group(0))
+    
+    # Format based on number of parts
+    if len(numeric_parts) == 1:
+        return f"{parts[0]}.x"
+    elif len(numeric_parts) == 2:
+        return f"{parts[0]}.{parts[1]}.x"
+    else:
+        return version
 
 class Sorter:
     """Main client for the Sorter API."""
@@ -25,6 +145,7 @@ class Sorter:
                 - vote_magnitude: "equal" (-50 to 50) or "positive" (0 to 100), default "equal"
                 - verbose: If True, enables detailed logging, default False
                 - quiet: If True, reduces logging to warnings and errors, default False
+                - compatibility_warnings: If True, show API version compatibility warnings, default True
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
@@ -38,7 +159,8 @@ class Sorter:
         self._options = {
             "vote_magnitude": "equal",
             "verbose": False,
-            "quiet": False
+            "quiet": False,
+            "compatibility_warnings": True
         }
         
         # Update with user-provided options
@@ -50,6 +172,70 @@ class Sorter:
         
         logger.debug(f"Sorter SDK initialized with base URL: {self.base_url}")
         logger.debug(f"Options: {self._pretty_json(self._options)}")
+        
+        # Check API version compatibility
+        self._check_api_compatibility()
+    
+    def _check_api_compatibility(self):
+        """Check if connected API version is compatible with this SDK."""
+        # Check if compatibility warnings are explicitly disabled
+        if self._options["compatibility_warnings"] is False:
+            logger.debug("API compatibility checking is disabled")
+            return
+            
+        try:
+            # Get API version from health endpoint
+            response = self.client.get(f"{self.base_url}/api/health")
+            if response.status_code == 200:
+                health_data = response.json()
+                api_version = health_data.get("version")
+                
+                if api_version:
+                    compatible_versions = _get_compatible_versions()
+                    fully_compatible, partially_compatible, matched_pattern = _is_version_compatible(api_version, compatible_versions)
+                    
+                    # Get the best version (last in the list)
+                    best_version = compatible_versions[-1] if compatible_versions else None
+                    
+                    # Format versions for display
+                    display_versions = [_format_version_for_display(v) for v in compatible_versions]
+                    display_best = _format_version_for_display(best_version) if best_version else None
+                    
+                    # Determine if warnings should be shown (considering quiet and verbose options)
+                    # If compatibility_warnings option is explicitly set, respect it first
+                    show_warnings = self._options["compatibility_warnings"]
+                    
+                    # Log compatibility info always
+                    if not (fully_compatible or partially_compatible):
+                        # Not compatible at all
+                        if show_warnings:
+                            logger.warning(
+                                f"Connected API version '{api_version}' may not be compatible with this SDK. "
+                                f"Supported versions: {', '.join(display_versions)}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Connected API version '{api_version}' may not be compatible with this SDK. "
+                                f"Supported versions: {', '.join(display_versions)}"
+                            )
+                    elif partially_compatible and not fully_compatible:
+                        # Partially compatible (matched major version only)
+                        if show_warnings:
+                            logger.warning(
+                                f"Connected API version '{api_version}' is partially compatible with this SDK. "
+                                f"For best experience, consider using API version {display_best}."
+                            )
+                        else:
+                            logger.debug(
+                                f"Connected API version '{api_version}' is partially compatible with this SDK. "
+                                f"For best experience, consider using API version {display_best}."
+                            )
+                    else:
+                        # Fully compatible
+                        logger.debug(f"Connected to API version {api_version}, which is compatible with this SDK")
+        except Exception as e:
+            # Don't fail initialization if version check fails
+            logger.debug(f"Failed to check API version compatibility: {e}")
     
     def _configure_logging(self):
         """Configure logging based on options."""
@@ -287,8 +473,37 @@ class Sorter:
             if attr.title.lower() == title.lower():
                 return attr
         return None
+    
+    def attribute(self, title: str, description: str = "") -> "Attribute":
+        """Get an existing attribute or create a new one if it doesn't exist.
         
-    def vote(self, left_item: "Item", magnitude_or_right_item: Union[int, "Item"], right_item_or_magnitude: Union["Item", int], attribute: Optional[int] = None) -> "Vote":
+        Uses the /api/attribute/exists endpoint to efficiently check if the attribute exists.
+        
+        Args:
+            title: Title of the attribute
+            description: Optional description (used only if creating a new attribute)
+            
+        Returns:
+            Attribute: Existing or new attribute instance
+        """
+        # Check if attribute exists
+        try:
+            response = self._request("GET", f"/api/attribute/exists?title={title}")
+            # If we get here, the attribute exists
+            if response.get("exists", False) and "id" in response:
+                logger.debug(f"Attribute '{title}' already exists with ID {response.get('id')}")
+                # Get the attribute by ID
+                attr_response = self._request("GET", f"/api/attribute?id={response.get('id')}")
+                if attr_response and "attributes" in attr_response and len(attr_response["attributes"]) > 0:
+                    return Attribute(self, attr_response["attributes"][0])
+        except httpx.HTTPStatusError:
+            # 404 means attribute doesn't exist, continue to creation
+            logger.debug(f"Attribute '{title}' doesn't exist, will create")
+        
+        # Create the attribute if it doesn't exist or we couldn't retrieve it
+        return self.create_attribute(title, description)
+        
+    def vote(self, left_item: "Item", magnitude_or_right_item: Union[int, "Item"], right_item_or_magnitude: Union["Item", int], attribute: Optional[Union[int, "Attribute"]] = None) -> "Vote":
         """Record a vote between two items.
         
         Supports two parameter orderings:
@@ -299,7 +514,7 @@ class Sorter:
             left_item: Left item in comparison
             magnitude_or_right_item: Either the magnitude (-50 to 50 or 0 to 100) or the right item
             right_item_or_magnitude: Either the right item or the magnitude
-            attribute: Optional attribute ID for this vote
+            attribute: Optional attribute ID or Attribute object for this vote
             
         Returns:
             Vote: Recorded vote instance
@@ -528,12 +743,10 @@ class Tag:
             >>> # Use attribute ID in voting
             >>> tag.vote(1, 2, 3, attribute=attr_id)
         """
-        attr = self.client.get_attribute(title)
-        if attr is None:
-            attr = self.client.create_attribute(title, description)
+        attr = self.client.attribute(title, description)
         return attr.id
 
-    def vote(self, left_item: "Item", magnitude_or_right_item: Union[int, "Item"], right_item_or_magnitude: Union["Item", int], attribute: Optional[int] = None) -> "Vote":
+    def vote(self, left_item: "Item", magnitude_or_right_item: Union[int, "Item"], right_item_or_magnitude: Union["Item", int], attribute: Optional[Union[int, "Attribute"]] = None) -> "Vote":
         """Record a vote between two items in this tag.
         
         Supports two parameter orderings:
@@ -544,7 +757,7 @@ class Tag:
             left_item: Left item in comparison
             magnitude_or_right_item: Either the magnitude (-50 to 50 or 0 to 100) or the right item
             right_item_or_magnitude: Either the right item or the magnitude
-            attribute: Optional attribute ID for this vote
+            attribute: Optional attribute ID or Attribute object for this vote
             
         Returns:
             Vote: Recorded vote instance
