@@ -25,12 +25,21 @@ def test_sorter_example():
     )
 
     # Step 1: Create the tag
-    tag = sorter.tag("alphabet_uniq") # TODO: errors suck, also tag names are globally unique
+    tag = sorter.tag("alphabet_uniq") # FIXME: tag names are globally unique
     
 
     # Step 2: Add letters A-Z
     # Method 1: Using the get_or_create_item method (recommended)
     letters = {ch: tag.get_or_create_item(ch) for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+    
+    # Test tag.link() method - Get link to the tag page
+    tag_link = tag.link()
+    print(f"Tag link: {tag_link}")
+    
+    # Test item.link() method - Get link to a specific item page
+    item_a = letters["A"]
+    item_link = item_a.link()
+    print(f"Item 'A' link: {item_link}")
     
     # Method 2: Manual check for existing items (alternative approach)
     """
@@ -139,6 +148,20 @@ def test_sorter_example():
     # Now votes should be in 0-100 range
     tag.vote(left, right, 75)  # 75 in 0-100 scale
     print(f"Voted on {left.name} vs {right.name} with positive scale (75)")
+    
+    # Test link methods with quiet mode
+    print("\nLink methods with quiet mode:")
+    sorter.options(quiet=True)
+    
+    # When quiet=True, the links are returned without printing pretty messages
+    quiet_tag_link = tag.link()
+    quiet_item_link = item_a.link()
+    
+    print(f"Tag link (quiet mode): {quiet_tag_link}")
+    print(f"Item 'A' link (quiet mode): {quiet_item_link}")
+    
+    # Switch back to normal mode
+    sorter.options(quiet=False)
 
 if __name__ == "__main__":
     test_sorter_example() 

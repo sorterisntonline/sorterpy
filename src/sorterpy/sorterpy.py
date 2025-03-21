@@ -651,6 +651,22 @@ class Tag:
         
         logger.debug(f"Tag initialized: {self.title} (ID: {self.id})")
     
+    def link(self) -> str:
+        """Get a link to this tag on Sorter.social.
+        
+        Returns:
+            str: URL to the tag page
+        """
+        url = f"{self.client.base_url}/{self.id}/{self.slug}"
+        
+        # If in quiet mode, just return the URL
+        if self.client._options.get("quiet", False):
+            return url
+        
+        # Otherwise, print a pretty message with color and emoji
+        logger.info(f"⚖️  \033[1;36mSorter tag link\033[0m: \033[4;34m{url}\033[0m")
+        return url
+    
     def update(self, title: Optional[str] = None, description: Optional[str] = None, 
                unlisted: Optional[bool] = None, domain_pk_namespace: Optional[str] = None,
                domain_pk: Optional[str] = None) -> "Tag":
@@ -1037,6 +1053,32 @@ class Item:
         self.domain_pk_namespace = data.get("domain_pk_namespace")
         self.domain_pk = data.get("domain_pk")
         logger.debug(f"Item initialized: {self.title} (ID: {self.id})")
+    
+    def link(self) -> str:
+        """Get a link to this item on Sorter.social.
+        
+        Returns:
+            str: URL to the item page
+        """
+        # Get base tag URL
+        tag_url = self.tag.link()
+        
+        # Remove any already printed message from tag link if not in quiet mode
+        if not self.client._options.get("quiet", False):
+            # The tag.link() method already printed a message, so we'll use a different approach
+            # to construct the URL without triggering another print
+            tag_url = f"{self.client.base_url}/{self.tag.id}/{self.tag.slug}"
+        
+        # Append item parameter
+        url = f"{tag_url}?item={self.id}"
+        
+        # If in quiet mode, just return the URL
+        if self.client._options.get("quiet", False):
+            return url
+        
+        # Otherwise, print a pretty message with color and emoji
+        logger.info(f"⚖️  \033[1;36mSorter item link\033[0m: \033[4;34m{url}\033[0m")
+        return url
     
     def __eq__(self, other):
         """Check if two items are equal.
