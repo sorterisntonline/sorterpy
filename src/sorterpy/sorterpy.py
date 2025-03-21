@@ -146,6 +146,7 @@ class Sorter:
                 - verbose: If True, enables detailed logging, default False
                 - quiet: If True, reduces logging to warnings and errors, default False
                 - compatibility_warnings: If True, show API version compatibility warnings, default True
+                - debug_http_full: If True, log complete HTTP payloads; if False, truncate large payloads, default False
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
@@ -160,7 +161,8 @@ class Sorter:
             "vote_magnitude": "equal",
             "verbose": False,
             "quiet": False,
-            "compatibility_warnings": True
+            "compatibility_warnings": True,
+            "debug_http_full": False
         }
         
         # Update with user-provided options
@@ -261,9 +263,51 @@ class Sorter:
             str: Pretty formatted JSON string
         """
         try:
-            return json.dumps(obj, indent=2, sort_keys=True)
+            # Convert to JSON first
+            json_str = json.dumps(obj, indent=2, sort_keys=True)
+            
+            # If debug_http_full is enabled, return the full JSON
+            if self._options.get("debug_http_full", False):
+                return json_str
+            
+            # Otherwise, truncate large arrays/objects for readability
+            try:
+                parsed = json.loads(json_str)
+                return self._truncate_large_payload(parsed)
+            except (json.JSONDecodeError, TypeError):
+                return json_str  # Fall back to full string if truncation fails
+                
         except (TypeError, ValueError):
             return str(obj)
+    
+    def _truncate_large_payload(self, obj: Any, threshold: int = 10) -> str:
+        """Truncate large arrays and objects in JSON data.
+        
+        Args:
+            obj: Object to truncate
+            threshold: Maximum number of items before truncation
+            
+        Returns:
+            str: Truncated JSON string
+        """
+        if isinstance(obj, list) and len(obj) > threshold:
+            # For lists, show first 3, ellipsis, last 3
+            truncated = obj[:3] + [f"... ({len(obj) - 6} more items) ..."] + obj[-3:]
+            return json.dumps(truncated, indent=2, sort_keys=True)
+        elif isinstance(obj, dict):
+            # For dictionaries, truncate large values
+            truncated = {}
+            for key, value in obj.items():
+                if isinstance(value, list) and len(value) > threshold:
+                    truncated[key] = value[:3] + [f"... ({len(value) - 6} more items) ..."] + value[-3:]
+                elif isinstance(value, dict):
+                    truncated[key] = json.loads(self._truncate_large_payload(value, threshold))
+                else:
+                    truncated[key] = value
+            return json.dumps(truncated, indent=2, sort_keys=True)
+        else:
+            # For other types, just convert to JSON
+            return json.dumps(obj, indent=2, sort_keys=True)
     
     def options(self, **kwargs) -> Dict:
         """Update client options and return current options.
@@ -355,7 +399,7 @@ class Sorter:
             error_msg = f"HTTP Error: {e.response.status_code} for {method} {url}"
             try:
                 error_data = e.response.json()
-                error_msg += f" - {error_data}"
+                error_msg += f" - {self._pretty_json(error_data)}"
             except Exception:
                 error_msg += f" - {e.response.text}"
             
