@@ -1,8 +1,15 @@
-# SorterPy
+# sorterpy
 
-> `WARNING` this isn't really used in favor of 'README.rst' for some reason. this will show up on GitHub though so there's that.  
+[![PyPI version](https://img.shields.io/pypi/v/sorterpy.svg)](https://pypi.python.org/pypi/sorterpy)
+[![Build and Release Status](https://github.com/sorterisntonline/sorterpy/actions/workflows/release_package.yml/badge.svg)](https://github.com/sorterisntonline/sorterpy/actions/workflows/release_package.yml)
+[![Documentation Status](https://readthedocs.org/projects/sorterpy/badge/?version=latest)](https://sorterpy.readthedocs.io/en/latest/?version=latest)
 
-A Python SDK for interacting with the Sorter API.
+The official Python SDK for sorter.social's seamless data labeling solutions for any AI/ML workflow.
+
+* Free software: MIT license
+* Documentation: https://sorterpy.readthedocs.io (NOT LIVE YET)
+
+> _Created by [`@zudsniper`](https://github.com/zudsniper) for [`sorter`](https://github.com/sorterisntonline)._   
 
 ## Installation
 
@@ -10,9 +17,14 @@ A Python SDK for interacting with the Sorter API.
 pip install sorterpy
 ```
 
-## Usage
+## API Compatibility
 
-### Basic Usage
+This SDK is compatible with the following sorter.social API versions:
+- 2.x
+- 2.1.x
+- 2.1.1
+
+## Basic Usage
 
 ```python
 from sorterpy import Sorter
@@ -20,10 +32,13 @@ from sorterpy import Sorter
 # Initialize the client with options
 sorter = Sorter(
     api_key="your-api-key",
+    base_url="http://localhost:3000",
     options={
         "vote_magnitude": "equal",  # Use -50 to 50 scale (default)
         "verbose": False,           # Disable detailed logging (default)
-        "quiet": False              # Don't suppress logs (default)
+        "quiet": False,             # Don't suppress logs (default)
+        "compatibility_warnings": True  # Show API version compatibility warnings (default)
+        "debug_http_full": False    # Truncate long http bodies when debug printing them (default)
     }
 )
 
@@ -39,14 +54,18 @@ tag.vote(item1, item2, 25)  # Prefer item1 over item2 with magnitude 25
 # OR
 tag.vote(item1, 25, item2)  # Same result, different parameter order
 
-# You can also vote directly through the sorter
-sorter.vote(item1, item2, 25)  # Same flexible parameter ordering
+# Get tag rankings
+rankings = tag.rankings()
 
-# Change options at runtime
-sorter.options(vote_magnitude="positive", verbose=True)
+# Get sorted and unsorted items
+sorted_items = rankings.sorted()
+unsorted_items = rankings.unsorted()
+
+# Get a voting pair
+left_item, right_item = rankings.pair()
 ```
 
-### Client Options
+## Client Options
 
 The Sorter client accepts the following options:
 
@@ -59,58 +78,48 @@ The Sorter client accepts the following options:
 - `quiet`: Reduces logging to only warnings and errors
   - `False` (default): Normal logging (INFO level)
   - `True`: Reduced logging (WARNING level)
+- `compatibility_warnings`: Show API version compatibility warnings
+  - `True` (default): Show warnings when API version might not be fully compatible
+  - `False`: Suppress compatibility warnings
+- `debug_http_full`: Display the entire body of HTTP request / response objects. 
+  - `False` (default): Truncate long HTTP req/resp payloads.
+  - `True`: Print full HTTP req/resp payloads. _(will result in very long sysout)_
 
 Note: If both `verbose` and `quiet` are set to `True`, `quiet` takes precedence.
 
-### Logging
+## Features
 
-The SDK uses loguru for logging with a customized format:
+- Authenticate Sorter Client with API Key
+- Create & Manage Tags
+- Create & Utilize Items
+- Vote on Pairs (of Items) within Tags
+- Get Live Links to Tags or Items
+- Retrieve Rankings on Tags (Elo, Sorted Items, Unsorted Items)
+- Work with Multiple Attributes for Voting
+- Flexible Vote Magnitude Scales[^1]
+- Comprehensive Logging System
+- API Version Compatibility Checking
 
-```
-12:34:56 | INFO     | sorterpy:__init__:42 - Sorter SDK initialized with base URL: https://sorter.social
-```
-
-The format includes:
-- Time (HH:MM:SS)
-- Log level
-- Abbreviated module name, function, and line number
-- Message
-
-When logging JSON data (like request/response bodies), the SDK pretty-prints the JSON for better readability.
-
-### Sorting Example
+## Working with Attributes
 
 ```python
-from sorterpy import Sorter
+# Create an attribute
+quality_attr = sorter.create_attribute("quality", "Quality of the item")
 
-# Initialize API client
-sorter = Sorter(api_key="your-api-key")
+# Get an attribute by title
+attr = sorter.get_attribute("quality")
 
-# Step 1: Create the tag
-tag = sorter.tag("alphabet")
+# List all attributes
+attributes = sorter.list_attributes()
 
-# Step 2: Add letters A-Z
-letters = {ch: tag.item(ch) for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+# Vote with an attribute
+tag.vote(item1, item2, 25, attribute=quality_attr.id)
 
-# Step 3: Sort by voting
-def letter_distance(a, b):
-    """Returns a vote score based on letter distance (-50 to 50)."""
-    return (ord(a.name) - ord(b.name)) * (50 / 25)  # Normalize to -50,50 range
-
-correct_order = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-votes = 0
-
-while "".join(x.name for x in tag.sorted()) != correct_order:
-    left, right = tag.rankings().pair()  # Returns ItemObjects
-    score = letter_distance(left, right)
-    sorter.vote(left, right, score)
-    votes += 1
-    print(f"Voted on {left.name} vs {right.name}: {score:.1f} ({votes} votes so far)")
-
-print(f"Alphabet sorted in {votes} votes!")
+# Get sorted items by attribute
+sorted_by_quality = tag.sorted(attribute="quality")
 ```
 
-### Working with Rankings
+## Working with Rankings
 
 ```python
 # Get tag rankings
@@ -131,46 +140,26 @@ skipped_items = rankings.skipped()
 # Get votes
 votes = rankings.votes()
 
-# Get attributes
-attributes = rankings.attributes()
-
-# Get selected attribute
-selected_attr = rankings.selected_attribute()
-
-# Get permissions
-perms = rankings.permissions()
-
 # Get users who voted
 users = rankings.users_who_voted()
-
-# Convenience methods on Tag
-sorted_items = tag.sorted()
-unsorted_items = tag.unsorted()
-left_item, right_item = tag.pair()
 ```
 
-### Working with Attributes
+## Logging
 
-```python
-# Create an attribute
-quality_attr = sorter.create_attribute("quality", "Quality of the item")
+The SDK uses loguru for logging with a customized format:
 
-# Get an attribute by title
-attr = sorter.get_attribute("quality")
-
-# List all attributes
-attributes = sorter.list_attributes()
-
-# Vote with an attribute
-tag.vote(item1, item2, 25, attribute=quality_attr.id)
-
-# Get sorted items by attribute
-sorted_by_quality = tag.sorted(attribute="quality")
-
-# Get unsorted items by attribute
-unsorted_by_quality = tag.unsorted(attribute="quality")
+```
+12:34:56 | INFO     | sorterpy:__init__:42 - Sorter SDK initialized with base URL: https://sorter.social
 ```
 
-## License
+The format includes:
+- Time (HH:MM:SS)
+- Log level
+- Abbreviated module name, function, and line number
+- Message
 
-MIT 
+## Credits
+
+This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [`audreyr/cookiecutter-pypackage`](https://github.com/audreyr/cookiecutter-pypackage) project template. 
+
+[^1]: This will be removed soon. 
