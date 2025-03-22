@@ -4,8 +4,32 @@ on:
   push:
     branches: [ stable ]
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      skip-tests: ${{ steps.check-commit.outputs.skip-tests }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Check if tests should be skipped
+        id: check-commit
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MESSAGE" | grep -q "SKIP-TESTS"; then
+            echo "skip-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip-tests=false" >> $GITHUB_OUTPUT
+          fi
+
   test:
+    needs: check-skip
+    if: needs.check-skip.outputs.skip-tests != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,7 +49,8 @@ jobs:
       run: tox
 
   build-and-release:
-    needs: test
+    needs: [check-skip, test]
+    if: always() && (needs.test.result == 'success' || needs.check-skip.outputs.skip-tests == 'true')
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -53,28 +78,18 @@ jobs:
     
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ env.PACKAGE_VERSION }}
-        release_name: ${{ env.PACKAGE_NAME }} v${{ env.PACKAGE_VERSION }}
+        name: ${{ env.PACKAGE_NAME }} v${{ env.PACKAGE_VERSION }}
         body: |
           Release version ${{ env.PACKAGE_VERSION }}
           
           Compatible Sorter API versions: ${{ env.COMPATIBLE_VERSIONS }}
         draft: false
         prerelease: false
-    
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/release/${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.tar.gz
-        asset_name: ${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.tar.gz
-        asset_content_type: application/gzip
+        files: |
+          dist/release/${{ env.PACKAGE_NAME }}-${{ env.PACKAGE_VERSION }}.tar.gz
     
     - name: Publish to PyPI
       env:
