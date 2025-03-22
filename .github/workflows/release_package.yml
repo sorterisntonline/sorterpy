@@ -86,6 +86,8 @@ jobs:
           Release version ${{ env.PACKAGE_VERSION }}
           
           Compatible Sorter API versions: ${{ env.COMPATIBLE_VERSIONS }}
+          
+          PyPI Package: https://pypi.org/project/${{ env.PACKAGE_NAME }}/${{ env.PACKAGE_VERSION }}/
         draft: false
         prerelease: false
         files: |
