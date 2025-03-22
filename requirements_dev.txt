@@ -1,14 +1,14 @@
 pip>=23.0
-bump2version==0.5.11
-wheel==0.33.6
-watchdog==0.9.0
-tox==3.14.0
-coverage==4.5.4
-Sphinx==7.2.6
-twine==5.0.0
-ruff==0.3.5
+bump2version>=0.5.11
+wheel>=0.33.6
+watchdog>=0.9.0
+tox>=3.14.0
+coverage>=4.5.4
+Sphinx>=8.0.0
+twine>=5.0.0
+ruff>=0.3.5
 python-dotenv>=1.0.0
 httpx>=0.20.0
 loguru>=0.6.0
 
-pytest==6.2.4
+pytest>=6.2.4
