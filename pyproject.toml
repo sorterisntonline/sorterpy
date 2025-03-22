@@ -19,7 +19,8 @@ classifiers = [
 license = {text = "MIT license"}
 dependencies = [
   "httpx",
-  "loguru"
+  "loguru",
+  "python-dotenv"
 ]
 
 [project.optional-dependencies]
