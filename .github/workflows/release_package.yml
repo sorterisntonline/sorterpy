@@ -2,7 +2,7 @@ name: Release Python Package
 
 on:
   push:
-    branches: [ stable ]
+    branches: [ stable ] 
 
 permissions:
   contents: write
