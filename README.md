@@ -7,7 +7,7 @@
 The official Python SDK for sorter.social's seamless data labeling solutions for any AI/ML workflow.
 
 * Free software: MIT license
-* Documentation: https://sorterpy.readthedocs.io (NOT LIVE YET)
+* Documentation: https://sorterpy.readthedocs.io
 
 > _Created by [`@zudsniper`](https://github.com/zudsniper) for [`sorter`](https://github.com/sorterisntonline)._   
 
