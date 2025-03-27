@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.19] - 2025-03-27
+
+### Fixed
+- Clean release attempt without skip flags
+- Testing release pipeline behavior
+
 ## [0.2.18] - 2025-03-27
 
 ### Fixed
