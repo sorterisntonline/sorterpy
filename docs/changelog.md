@@ -1,10 +1,10 @@
 # Changelog
 
-## [0.2.12] - 2025-03-27
+## [0.2.14] - 2025-03-27
 
 ### Added
-- Version bump for bugfix release
-- Test flow updates and pipeline improvements
+- Fixed workflow issues
+- Version increment for improved testing
 
 ## [0.2.13] - 2024-03-27
 
