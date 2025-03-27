@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       skip-tests: ${{ steps.check-commit.outputs.skip-tests }}
-      skip-release: ${{ steps.check-commit.outputs.skip-release }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -33,21 +32,7 @@ jobs:
             SKIP_TESTS="false"
           fi
           echo "skip-tests=$SKIP_TESTS" >> $GITHUB_OUTPUT
-          
-          # Check for SKIP-RELEASE with exact bracket matching
-          if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-RELEASE\]"; then
-            echo "Found [SKIP-RELEASE] tag"
-            SKIP_RELEASE="true"
-          else
-            echo "No [SKIP-RELEASE] tag found"
-            SKIP_RELEASE="false"
-          fi
-          echo "skip-release=$SKIP_RELEASE" >> $GITHUB_OUTPUT
-          
-          # Print the final output values for debugging
-          echo "Final output values:"
-          echo "skip-tests: $SKIP_TESTS"
-          echo "skip-release: $SKIP_RELEASE"
+          echo "Final output: skip-tests=$SKIP_TESTS"
 
   test:
     needs: check-flags
@@ -70,48 +55,9 @@ jobs:
     - name: Test with tox
       run: tox
 
-  # This job always runs and determines if we should build and release
-  determine-release:
-    needs: [check-flags, test]
-    if: always()
-    runs-on: ubuntu-latest
-    outputs:
-      should-release: ${{ steps.set-release.outputs.should-release }}
-    steps:
-    - name: Determine if release should happen
-      id: set-release
-      run: |
-        SKIP_TESTS="${{ needs.check-flags.outputs.skip-tests }}"
-        SKIP_RELEASE="${{ needs.check-flags.outputs.skip-release }}"
-        TEST_RESULT="${{ needs.test.result }}"
-        
-        echo "Debug values received:"
-        echo "SKIP_TESTS: $SKIP_TESTS"
-        echo "SKIP_RELEASE: $SKIP_RELEASE"
-        echo "TEST_RESULT: $TEST_RESULT"
-        
-        SHOULD_RELEASE="false"
-        REASON=""
-        
-        if [[ "$SKIP_RELEASE" == "true" ]]; then
-          REASON="Skipping release as requested in commit message"
-        elif [[ "$TEST_RESULT" == "success" ]]; then
-          SHOULD_RELEASE="true"
-          REASON="Tests passed, proceeding with release"
-        elif [[ "$SKIP_TESTS" == "true" ]]; then
-          SHOULD_RELEASE="true"
-          REASON="Tests skipped, but proceeding with release"
-        else
-          REASON="Tests failed or were not run, skipping release"
-        fi
-        
-        echo "$REASON"
-        echo "should-release=$SHOULD_RELEASE" >> $GITHUB_OUTPUT
-        echo "Final decision: should-release=$SHOULD_RELEASE"
-
   build-and-release:
-    needs: determine-release
-    if: needs.determine-release.outputs.should-release == 'true'
+    needs: [check-flags, test]
+    if: always() && (needs.test.result == 'success' || needs.check-flags.outputs.skip-tests == 'true')
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3

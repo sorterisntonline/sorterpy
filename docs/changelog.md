@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.22] - 2025-03-27
+
+### Fixed
+- Streamlined workflow with only SKIP-TESTS functionality
+- Simplified conditional logic for build and release
+- Fixed CI/CD pipeline for reliable releases
+
 ## [0.2.21] - 2025-03-27
 
 ### Fixed
