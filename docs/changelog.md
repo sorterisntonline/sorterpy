@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.18] - 2025-03-27
+
+### Fixed
+- Fixed output handling in CI workflow
+- Improved debug logging for GitHub Actions
+- Explicit variable handling for CI/CD flags
+
 ## [0.2.17] - 2025-03-27
 
 ### Added

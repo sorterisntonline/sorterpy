@@ -27,20 +27,27 @@ jobs:
           # Check for SKIP-TESTS with exact bracket matching
           if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-TESTS\]"; then
             echo "Found [SKIP-TESTS] tag"
-            echo "skip-tests=true" >> $GITHUB_OUTPUT
+            SKIP_TESTS="true"
           else
             echo "No [SKIP-TESTS] tag found"
-            echo "skip-tests=false" >> $GITHUB_OUTPUT
+            SKIP_TESTS="false"
           fi
+          echo "skip-tests=$SKIP_TESTS" >> $GITHUB_OUTPUT
           
           # Check for SKIP-RELEASE with exact bracket matching
           if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-RELEASE\]"; then
             echo "Found [SKIP-RELEASE] tag"
-            echo "skip-release=true" >> $GITHUB_OUTPUT
+            SKIP_RELEASE="true"
           else
             echo "No [SKIP-RELEASE] tag found"
-            echo "skip-release=false" >> $GITHUB_OUTPUT
+            SKIP_RELEASE="false"
           fi
+          echo "skip-release=$SKIP_RELEASE" >> $GITHUB_OUTPUT
+          
+          # Print the final output values for debugging
+          echo "Final output values:"
+          echo "skip-tests: $SKIP_TESTS"
+          echo "skip-release: $SKIP_RELEASE"
 
   test:
     needs: check-flags
@@ -78,23 +85,29 @@ jobs:
         SKIP_RELEASE="${{ needs.check-flags.outputs.skip-release }}"
         TEST_RESULT="${{ needs.test.result }}"
         
+        echo "Debug values received:"
         echo "SKIP_TESTS: $SKIP_TESTS"
         echo "SKIP_RELEASE: $SKIP_RELEASE"
         echo "TEST_RESULT: $TEST_RESULT"
         
+        SHOULD_RELEASE="false"
+        REASON=""
+        
         if [[ "$SKIP_RELEASE" == "true" ]]; then
-          echo "Skipping release as requested in commit message"
-          echo "should-release=false" >> $GITHUB_OUTPUT
+          REASON="Skipping release as requested in commit message"
         elif [[ "$TEST_RESULT" == "success" ]]; then
-          echo "Tests passed, proceeding with release"
-          echo "should-release=true" >> $GITHUB_OUTPUT
+          SHOULD_RELEASE="true"
+          REASON="Tests passed, proceeding with release"
         elif [[ "$SKIP_TESTS" == "true" ]]; then
-          echo "Tests skipped, but proceeding with release"
-          echo "should-release=true" >> $GITHUB_OUTPUT
+          SHOULD_RELEASE="true"
+          REASON="Tests skipped, but proceeding with release"
         else
-          echo "Tests failed or were not run, skipping release"
-          echo "should-release=false" >> $GITHUB_OUTPUT
+          REASON="Tests failed or were not run, skipping release"
         fi
+        
+        echo "$REASON"
+        echo "should-release=$SHOULD_RELEASE" >> $GITHUB_OUTPUT
+        echo "Final decision: should-release=$SHOULD_RELEASE"
 
   build-and-release:
     needs: determine-release
