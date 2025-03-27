@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sorterpy"
-version = "0.2.20"
+version = "0.2.21"
 description = "the official Python SDK for sorter.social's seamless data labeling solutions for any AI/ML workflow."
 readme = "README.md"
 authors = [

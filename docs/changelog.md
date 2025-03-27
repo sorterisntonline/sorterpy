@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.21] - 2025-03-27
+
+### Fixed
+- Properly testing simplified workflow with SKIP-TESTS flag
+- Testing workflow flag handling capability
+
 ## [0.2.20] - 2025-03-27
 
 ### Fixed
