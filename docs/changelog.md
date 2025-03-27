@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.13] - 2024-03-27
+
+### Added
+- New get_* methods to complement get_or_create methods
+  - get_tag()
+  - get_tag_by_id()
+  - get_item()
+  - get_item_by_id()
+- Static exists() methods for Tags, Items, and Attributes
+  - Tag.exists() and Sorter.exists_tag()
+  - Item.exists()
+  - Attribute.exists()
+
 ## [0.2.12] - 2024-03-27
 
 ### Added
