@@ -1,0 +1,48 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ master ] 
+
+permissions:
+  contents: read
+
+jobs:
+  check-flags:
+    runs-on: ubuntu-latest
+    outputs:
+      skip-tests: ${{ steps.check-commit.outputs.skip-tests }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Check commit flags
+        id: check-commit
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MESSAGE" | grep -q "SKIP-TESTS"; then
+            echo "skip-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip-tests=false" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    needs: check-flags
+    if: needs.check-flags.outputs.skip-tests != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install tox tox-gh-actions
+    - name: Test with tox
+      run: tox
