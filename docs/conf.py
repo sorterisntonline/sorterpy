@@ -1,14 +1,20 @@
 import os
 import sys
-import tomllib
+import re
 
 sys.path.insert(0, os.path.abspath('..'))
 
 # Read version from pyproject.toml
-with open('../pyproject.toml', 'rb') as f:
-    pyproject = tomllib.load(f)
-    version = pyproject['project']['version']
-    release = version
+def get_version_from_pyproject():
+    with open('../pyproject.toml', 'r') as f:
+        content = f.read()
+        version_match = re.search(r'version\s*=\s*"([^"]+)"', content)
+        if version_match:
+            return version_match.group(1)
+    return "0.0.0"
+
+version = get_version_from_pyproject()
+release = version
 
 project = 'sorterpy'
 copyright = '2024, sorter.social'

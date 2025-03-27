@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sorterpy"
-version = "0.2.10"
+version = "0.2.11"
 description = "the official Python SDK for sorter.social's seamless data labeling solutions for any AI/ML workflow."
 readme = "README.md"
 authors = [
@@ -32,7 +32,6 @@ dev = [
 ]
 
 [project.urls]
-
 bugs = "https://github.com/sorterisntonline/sorterpy/issues"
 changelog = "https://github.com/sorterisntonline/sorterpy/blob/master/changelog.md"
 homepage = "https://github.com/sorterisntonline/sorterpy"
@@ -56,10 +55,3 @@ files = "."
 strict = true
 warn_unreachable = true
 warn_no_return = true
-
-# [[tool.mypy.overrides]]
-# # Don't require test functions to include types
-# module = "tests.*"
-# allow_untyped_defs = true
-# disable_error_code = "attr-defined"
-

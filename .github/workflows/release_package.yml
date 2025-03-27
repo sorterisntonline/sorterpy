@@ -9,15 +9,16 @@ permissions:
   packages: write
 
 jobs:
-  check-skip:
+  check-flags:
     runs-on: ubuntu-latest
     outputs:
       skip-tests: ${{ steps.check-commit.outputs.skip-tests }}
+      skip-release: ${{ steps.check-commit.outputs.skip-release }}
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 2
-      - name: Check if tests should be skipped
+      - name: Check commit flags
         id: check-commit
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
@@ -26,10 +27,15 @@ jobs:
           else
             echo "skip-tests=false" >> $GITHUB_OUTPUT
           fi
+          if echo "$COMMIT_MESSAGE" | grep -q "SKIP-RELEASE"; then
+            echo "skip-release=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip-release=false" >> $GITHUB_OUTPUT
+          fi
 
   test:
-    needs: check-skip
-    if: needs.check-skip.outputs.skip-tests != 'true'
+    needs: check-flags
+    if: needs.check-flags.outputs.skip-tests != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -49,8 +55,10 @@ jobs:
       run: tox
 
   build-and-release:
-    needs: [check-skip, test]
-    if: always() && (needs.test.result == 'success' || needs.check-skip.outputs.skip-tests == 'true')
+    needs: [check-flags, test]
+    if: |
+      needs.check-flags.outputs.skip-release != 'true' && 
+      (needs.test.result == 'success' || needs.check-flags.outputs.skip-tests == 'true')
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
