@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - 2025-03-27
+
+### Fixed
+- Removed duplicate workflow file
+- Fixed double-release issue
+
 ## [0.3.0] - 2025-03-27
 
 ### Added
