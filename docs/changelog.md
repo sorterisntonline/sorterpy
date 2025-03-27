@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.23] - 2025-03-27
+
+### Fixed
+- Version increment for PyPI uniqueness
+- Fixed version collision with existing package
+
 ## [0.2.22] - 2025-03-27
 
 ### Fixed
