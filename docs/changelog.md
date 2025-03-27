@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.17] - 2025-03-27
+
+### Added
+- Complete workflow overhaul with more reliable flag detection
+- Improved release decision making process
+- Added comprehensive debugging to CI/CD pipeline
+
 ## [0.2.16] - 2025-03-27
 
 ### Added

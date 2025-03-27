@@ -24,29 +24,23 @@ jobs:
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           echo "Full commit message: $COMMIT_MESSAGE"
           
-          # Debug output to see if SKIP-TESTS is present
-          echo "Checking for SKIP-TESTS in commit message..."
+          # Check for SKIP-TESTS with exact bracket matching
           if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-TESTS\]"; then
-            echo "Found exact [SKIP-TESTS] pattern"
+            echo "Found [SKIP-TESTS] tag"
             echo "skip-tests=true" >> $GITHUB_OUTPUT
           else
-            echo "Did not find exact [SKIP-TESTS] pattern"
+            echo "No [SKIP-TESTS] tag found"
             echo "skip-tests=false" >> $GITHUB_OUTPUT
           fi
           
-          # Debug output to see if SKIP-RELEASE is present
-          echo "Checking for SKIP-RELEASE in commit message..."
+          # Check for SKIP-RELEASE with exact bracket matching
           if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-RELEASE\]"; then
-            echo "Found exact [SKIP-RELEASE] pattern"
+            echo "Found [SKIP-RELEASE] tag"
             echo "skip-release=true" >> $GITHUB_OUTPUT
           else
-            echo "Did not find exact [SKIP-RELEASE] pattern"
+            echo "No [SKIP-RELEASE] tag found"
             echo "skip-release=false" >> $GITHUB_OUTPUT
           fi
-          
-          # Final debug output
-          echo "skip-tests value: $(grep skip-tests $GITHUB_OUTPUT | cut -d= -f2)"
-          echo "skip-release value: $(grep skip-release $GITHUB_OUTPUT | cut -d= -f2 || echo 'not set')"
 
   test:
     needs: check-flags
@@ -69,20 +63,42 @@ jobs:
     - name: Test with tox
       run: tox
 
-  debug-outputs:
-    needs: check-flags
+  # This job always runs and determines if we should build and release
+  determine-release:
+    needs: [check-flags, test]
+    if: always()
     runs-on: ubuntu-latest
+    outputs:
+      should-release: ${{ steps.set-release.outputs.should-release }}
     steps:
-    - name: Debug output values
+    - name: Determine if release should happen
+      id: set-release
       run: |
-        echo "Skip tests: ${{ needs.check-flags.outputs.skip-tests }}"
-        echo "Skip release: ${{ needs.check-flags.outputs.skip-release }}"
+        SKIP_TESTS="${{ needs.check-flags.outputs.skip-tests }}"
+        SKIP_RELEASE="${{ needs.check-flags.outputs.skip-release }}"
+        TEST_RESULT="${{ needs.test.result }}"
+        
+        echo "SKIP_TESTS: $SKIP_TESTS"
+        echo "SKIP_RELEASE: $SKIP_RELEASE"
+        echo "TEST_RESULT: $TEST_RESULT"
+        
+        if [[ "$SKIP_RELEASE" == "true" ]]; then
+          echo "Skipping release as requested in commit message"
+          echo "should-release=false" >> $GITHUB_OUTPUT
+        elif [[ "$TEST_RESULT" == "success" ]]; then
+          echo "Tests passed, proceeding with release"
+          echo "should-release=true" >> $GITHUB_OUTPUT
+        elif [[ "$SKIP_TESTS" == "true" ]]; then
+          echo "Tests skipped, but proceeding with release"
+          echo "should-release=true" >> $GITHUB_OUTPUT
+        else
+          echo "Tests failed or were not run, skipping release"
+          echo "should-release=false" >> $GITHUB_OUTPUT
+        fi
 
   build-and-release:
-    needs: [check-flags, test, debug-outputs]
-    if: |
-      needs.check-flags.outputs.skip-release != 'true' && 
-      (needs.test.result == 'success' || needs.check-flags.outputs.skip-tests == 'true')
+    needs: determine-release
+    if: needs.determine-release.outputs.should-release == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
