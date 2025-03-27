@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.20] - 2025-03-27
+
+### Fixed
+- Completely replaced workflow with simplified version
+- Removed all complex condition logic
+- Created direct release pipeline
+
 ## [0.2.19] - 2025-03-27
 
 ### Fixed
