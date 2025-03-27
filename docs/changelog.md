@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.16] - 2025-03-27
+
+### Added
+- Enhanced CI workflow debugging
+- Fixed workflow flag parsing
+
 ## [0.2.14] - 2025-03-27
 
 ### Added

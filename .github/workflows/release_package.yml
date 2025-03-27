@@ -22,16 +22,31 @@ jobs:
         id: check-commit
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
-          if echo "$COMMIT_MESSAGE" | grep -q "SKIP-TESTS"; then
+          echo "Full commit message: $COMMIT_MESSAGE"
+          
+          # Debug output to see if SKIP-TESTS is present
+          echo "Checking for SKIP-TESTS in commit message..."
+          if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-TESTS\]"; then
+            echo "Found exact [SKIP-TESTS] pattern"
             echo "skip-tests=true" >> $GITHUB_OUTPUT
           else
+            echo "Did not find exact [SKIP-TESTS] pattern"
             echo "skip-tests=false" >> $GITHUB_OUTPUT
           fi
-          if echo "$COMMIT_MESSAGE" | grep -q "SKIP-RELEASE"; then
+          
+          # Debug output to see if SKIP-RELEASE is present
+          echo "Checking for SKIP-RELEASE in commit message..."
+          if echo "$COMMIT_MESSAGE" | grep -q "\[SKIP-RELEASE\]"; then
+            echo "Found exact [SKIP-RELEASE] pattern"
             echo "skip-release=true" >> $GITHUB_OUTPUT
           else
+            echo "Did not find exact [SKIP-RELEASE] pattern"
             echo "skip-release=false" >> $GITHUB_OUTPUT
           fi
+          
+          # Final debug output
+          echo "skip-tests value: $(grep skip-tests $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "skip-release value: $(grep skip-release $GITHUB_OUTPUT | cut -d= -f2 || echo 'not set')"
 
   test:
     needs: check-flags
@@ -54,8 +69,17 @@ jobs:
     - name: Test with tox
       run: tox
 
+  debug-outputs:
+    needs: check-flags
+    runs-on: ubuntu-latest
+    steps:
+    - name: Debug output values
+      run: |
+        echo "Skip tests: ${{ needs.check-flags.outputs.skip-tests }}"
+        echo "Skip release: ${{ needs.check-flags.outputs.skip-release }}"
+
   build-and-release:
-    needs: [check-flags, test]
+    needs: [check-flags, test, debug-outputs]
     if: |
       needs.check-flags.outputs.skip-release != 'true' && 
       (needs.test.result == 'success' || needs.check-flags.outputs.skip-tests == 'true')
