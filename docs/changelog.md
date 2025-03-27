@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2025-03-27
+
+### Added
+- Major version bump to ensure successful release
+- New minor version for improved workflow and testing
+
 ## [0.2.23] - 2025-03-27
 
 ### Fixed
