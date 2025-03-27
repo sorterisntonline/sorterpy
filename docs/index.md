@@ -8,6 +8,7 @@ installation
 quickstart
 api
 configuration
+example_walkthrough
 advanced
 changelog
 contributing
@@ -22,4 +23,5 @@ sorterpy is the official Python SDK for sorter.social's data labeling platform. 
 - [Installation Guide](installation.md)
 - [Quick Start](quickstart.md)
 - [API Reference](api.md)
+- [Detailed Example](example_walkthrough.md)
 - [GitHub Repository](https://github.com/sorterisntonline/sorterpy)

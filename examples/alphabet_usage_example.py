@@ -14,7 +14,7 @@ def test_sorter_example():
     # Initialize API client with options from environment variables
     sorter = Sorter(
         api_key=os.getenv('SORT_API_KEY', 'your-api-key'),
-        base_url=os.getenv('SORT_BASE_URL', 'https://sorter.social'),
+        base_url=os.getenv('SORT_BASE_URL', 'https://sorter.social'), # for development, use https://staging.sorter.social 
         options={
             # Choose one of the following vote_magnitude options:
             "vote_magnitude": "positive",  # Use 0-100 scale

@@ -4,7 +4,7 @@
 
 Configure the Sorter client with these options:
 
-### Vote Magnitude
+### Vote Magnitude (Deprecated)
 
 ```python
 options = {
@@ -12,8 +12,7 @@ options = {
 }
 ```
 
-- `"equal"` (default): -50 to 50 scale
-- `"positive"`: 0 to 100 scale
+Note: The vote_magnitude option is deprecated and will be removed in a future version. All votes will use a standardized scale. Current implementations should prepare to migrate away from this option.
 
 ### Logging
 
@@ -34,6 +33,18 @@ options = {
     "debug_http_full": False        # Show full HTTP payloads
 }
 ```
+
+## Voting Method Parameters (Deprecated)
+
+The current implementation allows multiple parameter orderings for the vote method:
+
+```python
+# These are currently equivalent but the flexibility is deprecated
+tag.vote(left_item, right_item, magnitude)
+tag.vote(left_item, magnitude, right_item)
+```
+
+Note: This parameter flexibility is deprecated and will be removed in a future version. All vote calls should use the standard ordering: `vote(left_item, right_item, magnitude)`.
 
 ## Logging Format
 

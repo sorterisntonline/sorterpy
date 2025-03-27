@@ -1,12 +1,25 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.12] - 2024-03-27
 
 ### Added
-- Markdown documentation support
-- ReadTheDocs integration
+- Detailed example walkthrough documentation
+- Extended ReadTheDocs configuration
 
-## [1.0.0] - 2024-03-27
+### Changed
+- Marked vote_magnitude option as deprecated
+- Marked flexible vote parameter ordering as deprecated
+- Updated documentation to reflect deprecation notices
+- Enhanced configuration documentation
+
+## [0.2.11] - 2024-03-27
+
+### Added
+- Initial Markdown documentation support
+- ReadTheDocs integration
+- Skip release workflow option
+
+## [0.2.10] - 2024-03-27
 
 ### Added
 - Initial release
